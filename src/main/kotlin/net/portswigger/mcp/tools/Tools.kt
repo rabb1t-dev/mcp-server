@@ -15,6 +15,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.portswigger.mcp.config.McpConfig
 import net.portswigger.mcp.schema.toSerializableForm
+import net.portswigger.mcp.schema.toSummaryForm
 import net.portswigger.mcp.security.DataAccessSecurity
 import net.portswigger.mcp.security.DataAccessType
 import net.portswigger.mcp.security.HttpRequestSecurity
@@ -23,7 +24,7 @@ import java.awt.KeyboardFocusManager
 import java.util.regex.Pattern
 import javax.swing.JTextArea
 
-private suspend fun checkDataAccessOrDeny(
+internal suspend fun checkDataAccessOrDeny(
     accessType: DataAccessType, config: McpConfig, api: MontoyaApi, logMessage: String
 ): Boolean {
     val allowed = DataAccessSecurity.checkDataAccessPermission(accessType, config)
@@ -258,8 +259,12 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
     }
 
     if (api.burpSuite().version().edition() == BurpSuiteEdition.PROFESSIONAL) {
-        mcpPaginatedTool<GetScannerIssues>("Displays information about issues identified by the scanner") {
-            api.siteMap().issues().asSequence().map { Json.encodeToString(it.toSerializableForm()) }
+        mcpPaginatedTool<GetScannerIssues>(
+            "Displays lightweight summaries of scanner issues. Use get_scanner_issue for full details."
+        ) {
+            api.siteMap().issues().asSequence()
+                .withIndex()
+                .map { (index, issue) -> Json.encodeToString(issue.toSummaryForm(index)) }
         }
 
         val collaboratorClient by lazy { api.collaborator().createClient() }
@@ -304,7 +309,10 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
         }
     }
 
-    mcpPaginatedTool<GetProxyHttpHistory>("Displays items within the proxy HTTP history") {
+    mcpPaginatedTool<GetProxyHttpHistory>(
+        "Displays lightweight summaries of proxy HTTP history entries (no bodies). " +
+            "Use get_proxy_history_entry for full request/response details."
+    ) {
         val allowed = runBlocking {
             checkDataAccessOrDeny(DataAccessType.HTTP_HISTORY, config, api, "HTTP history")
         }
@@ -312,23 +320,49 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
             return@mcpPaginatedTool sequenceOf("HTTP history access denied by Burp Suite")
         }
 
-        api.proxy().history().asSequence().map { truncateIfNeeded(Json.encodeToString(it.toSerializableForm())) }
+        val filter = historyFilterFromParams(
+            inScopeOnly = inScopeOnly,
+            host = host,
+            method = method,
+            statusCodeClass = statusCodeClass,
+            excludeStaticAssets = excludeStaticAssets,
+            urlRegex = urlRegex,
+            uniqueEndpoints = uniqueEndpoints
+        )
+
+        filterProxyHistory(api.proxy().history(), filter, api).asSequence()
+            .map { (index, entry) -> Json.encodeToString(entry.toSummaryForm(index)) }
     }
 
-    mcpPaginatedTool<GetProxyHttpHistoryRegex>("Displays items matching a specified regex within the proxy HTTP history") {
+    mcpPaginatedTool<GetProxyHttpHistoryRegex>(
+        "Displays lightweight summaries of proxy HTTP history entries matching a full-text regex. " +
+            "Use get_proxy_history_entry for full request/response details."
+    ) {
         val allowed = runBlocking {
             checkDataAccessOrDeny(DataAccessType.HTTP_HISTORY, config, api, "HTTP history")
         }
         if (!allowed) {
             return@mcpPaginatedTool sequenceOf("HTTP history access denied by Burp Suite")
         }
+
+        val filter = historyFilterFromParams(
+            inScopeOnly = inScopeOnly,
+            host = host,
+            method = method,
+            statusCodeClass = statusCodeClass,
+            excludeStaticAssets = excludeStaticAssets,
+            urlRegex = urlRegex,
+            uniqueEndpoints = uniqueEndpoints
+        )
 
         val compiledRegex = Pattern.compile(regex)
-        api.proxy().history { it.contains(compiledRegex) }.asSequence()
-            .map { truncateIfNeeded(Json.encodeToString(it.toSerializableForm())) }
+        filterProxyHistory(api.proxy().history(), filter, api, compiledRegex).asSequence()
+            .map { (index, entry) -> Json.encodeToString(entry.toSummaryForm(index)) }
     }
 
-    mcpPaginatedTool<GetOrganizerItems>("Displays items within the Organizer tab") {
+    mcpPaginatedTool<GetOrganizerItems>(
+        "Displays lightweight summaries of Organizer items. Use get_organizer_item for full details."
+    ) {
         val allowed = runBlocking {
             checkDataAccessOrDeny(DataAccessType.ORGANIZER, config, api, "Organizer")
         }
@@ -336,10 +370,14 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
             return@mcpPaginatedTool sequenceOf("Organizer access denied by Burp Suite")
         }
 
-        api.organizer().items().asSequence().map { truncateIfNeeded(Json.encodeToString(it.toSerializableForm())) }
+        api.organizer().items().asSequence()
+            .withIndex()
+            .map { (index, item) -> Json.encodeToString(item.toSummaryForm(index)) }
     }
 
-    mcpPaginatedTool<GetOrganizerItemsRegex>("Displays items matching a specified regex within the Organizer tab") {
+    mcpPaginatedTool<GetOrganizerItemsRegex>(
+        "Displays lightweight summaries of Organizer items matching a regex. Use get_organizer_item for full details."
+    ) {
         val allowed = runBlocking {
             checkDataAccessOrDeny(DataAccessType.ORGANIZER, config, api, "Organizer")
         }
@@ -349,7 +387,8 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
 
         val compiledRegex = Pattern.compile(regex)
         api.organizer().items { it.contains(compiledRegex) }.asSequence()
-            .map { truncateIfNeeded(Json.encodeToString(it.toSerializableForm())) }
+            .withIndex()
+            .map { (index, item) -> Json.encodeToString(item.toSummaryForm(index)) }
     }
 
     mcpPaginatedTool<GetProxyWebsocketHistory>("Displays items within the proxy WebSocket history") {
@@ -408,6 +447,12 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
 
         "Editor text has been set"
     }
+
+    registerPentestTools(
+        api,
+        config,
+        api.burpSuite().version().edition() == BurpSuiteEdition.PROFESSIONAL
+    )
 }
 
 fun getActiveEditor(api: MontoyaApi): JTextArea? {
@@ -514,10 +559,31 @@ data class SetActiveEditorContents(val text: String)
 data class GetScannerIssues(override val count: Int, override val offset: Int) : Paginated
 
 @Serializable
-data class GetProxyHttpHistory(override val count: Int, override val offset: Int) : Paginated
+data class GetProxyHttpHistory(
+    override val count: Int,
+    override val offset: Int,
+    val inScopeOnly: Boolean = false,
+    val host: String? = null,
+    val method: String? = null,
+    val statusCodeClass: String? = null,
+    val excludeStaticAssets: Boolean = false,
+    val urlRegex: String? = null,
+    val uniqueEndpoints: Boolean = false
+) : Paginated
 
 @Serializable
-data class GetProxyHttpHistoryRegex(val regex: String, override val count: Int, override val offset: Int) : Paginated
+data class GetProxyHttpHistoryRegex(
+    val regex: String,
+    override val count: Int,
+    override val offset: Int,
+    val inScopeOnly: Boolean = false,
+    val host: String? = null,
+    val method: String? = null,
+    val statusCodeClass: String? = null,
+    val excludeStaticAssets: Boolean = false,
+    val urlRegex: String? = null,
+    val uniqueEndpoints: Boolean = false
+) : Paginated
 
 @Serializable
 data class GetOrganizerItems(override val count: Int, override val offset: Int) : Paginated

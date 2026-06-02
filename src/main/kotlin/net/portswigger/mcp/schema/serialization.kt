@@ -1,6 +1,8 @@
 package net.portswigger.mcp.schema
 
 import burp.api.montoya.collaborator.Interaction as CollaboratorInteraction
+import burp.api.montoya.http.message.HttpRequestResponse as MontoyaHttpRequestResponse
+import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.organizer.OrganizerItem
 import burp.api.montoya.proxy.ProxyHttpRequestResponse
 import burp.api.montoya.proxy.ProxyWebSocketMessage
@@ -51,6 +53,86 @@ fun ProxyHttpRequestResponse.toSerializableForm(): HttpRequestResponse {
         response = response()?.toString() ?: "<no response>",
         notes = annotations().notes()
     )
+}
+
+fun ProxyHttpRequestResponse.toSummaryForm(index: Int): ProxyHistorySummary {
+    val request = try {
+        finalRequest()
+    } catch (_: Exception) {
+        null
+    }
+
+    val response = response()
+    val annotations = annotations()
+
+    return ProxyHistorySummary(
+        index = index,
+        id = id(),
+        method = request?.method() ?: "<unknown>",
+        url = request?.let { runCatching { it.url() }.getOrNull() } ?: "<unknown>",
+        host = request?.httpService()?.host() ?: "<unknown>",
+        statusCode = response?.statusCode()?.toInt() ?: -1,
+        mimeType = mimeType()?.toString(),
+        responseLength = response?.body()?.length() ?: 0,
+        hasParameters = request?.hasParameters() ?: false,
+        highlight = if (annotations.hasHighlightColor()) annotations.highlightColor().displayName() else null,
+        notes = annotations.notes().takeIf { it.isNotBlank() },
+        time = time().toString()
+    )
+}
+
+fun MontoyaHttpRequestResponse.toSummaryForm(index: Int): SiteMapEntrySummary {
+    val request = request()
+    val response = response()
+    val annotations = annotations()
+
+    return SiteMapEntrySummary(
+        index = index,
+        method = request.method(),
+        url = runCatching { request.url() }.getOrNull() ?: "<unknown>",
+        host = request.httpService().host(),
+        statusCode = response?.statusCode()?.toInt() ?: -1,
+        mimeType = response?.let { runCatching { it.mimeType().toString() }.getOrNull() },
+        responseLength = response?.body()?.length() ?: 0,
+        hasParameters = request.hasParameters(),
+        highlight = if (annotations.hasHighlightColor()) annotations.highlightColor().displayName() else null,
+        notes = annotations.notes().takeIf { it.isNotBlank() }
+    )
+}
+
+fun AuditIssue.toSummaryForm(index: Int): ScannerIssueSummary {
+    return ScannerIssueSummary(
+        index = index,
+        name = name(),
+        severity = severity().name,
+        confidence = confidence().name,
+        url = baseUrl(),
+        host = httpService()?.host()
+    )
+}
+
+fun OrganizerItem.toSummaryForm(index: Int): OrganizerItemSummary {
+    return OrganizerItemSummary(
+        index = index,
+        id = id(),
+        status = status().displayName(),
+        method = request()?.method(),
+        url = request()?.let { runCatching { it.url() }.getOrNull() },
+        host = request()?.httpService()?.host(),
+        statusCode = response()?.statusCode()?.toInt() ?: -1,
+        highlight = if (annotations().hasHighlightColor()) annotations().highlightColor().displayName() else null,
+        notes = annotations().notes().takeIf { it.isNotBlank() }
+    )
+}
+
+fun HttpRequest.extractParametersForm(): List<ExtractedParameter> {
+    return parameters().map { param ->
+        ExtractedParameter(
+            name = param.name(),
+            value = param.value(),
+            type = param.type().name
+        )
+    }
 }
 
 fun OrganizerItem.toSerializableForm(): OrganizerItemDetails {
@@ -117,6 +199,66 @@ data class HttpRequestResponse(
     val request: String?,
     val response: String?,
     val notes: String?
+)
+
+@Serializable
+data class ProxyHistorySummary(
+    val index: Int,
+    val id: Int,
+    val method: String,
+    val url: String,
+    val host: String,
+    val statusCode: Int,
+    val mimeType: String?,
+    val responseLength: Int,
+    val hasParameters: Boolean,
+    val highlight: String?,
+    val notes: String?,
+    val time: String?
+)
+
+@Serializable
+data class SiteMapEntrySummary(
+    val index: Int,
+    val method: String,
+    val url: String,
+    val host: String,
+    val statusCode: Int,
+    val mimeType: String?,
+    val responseLength: Int,
+    val hasParameters: Boolean,
+    val highlight: String?,
+    val notes: String?
+)
+
+@Serializable
+data class ScannerIssueSummary(
+    val index: Int,
+    val name: String?,
+    val severity: String,
+    val confidence: String,
+    val url: String?,
+    val host: String?
+)
+
+@Serializable
+data class OrganizerItemSummary(
+    val index: Int,
+    val id: Int,
+    val status: String,
+    val method: String?,
+    val url: String?,
+    val host: String?,
+    val statusCode: Int,
+    val highlight: String?,
+    val notes: String?
+)
+
+@Serializable
+data class ExtractedParameter(
+    val name: String,
+    val value: String,
+    val type: String
 )
 
 @Serializable

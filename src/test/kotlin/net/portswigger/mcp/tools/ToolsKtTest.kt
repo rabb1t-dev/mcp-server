@@ -9,7 +9,9 @@ import burp.api.montoya.http.Http
 import burp.api.montoya.http.HttpMode
 import burp.api.montoya.http.HttpProtocol
 import burp.api.montoya.http.message.HttpHeader
+import burp.api.montoya.http.message.MimeType
 import burp.api.montoya.http.message.requests.HttpRequest
+import burp.api.montoya.http.message.responses.HttpResponse
 import burp.api.montoya.logging.Logging
 import burp.api.montoya.persistence.PersistedObject
 import burp.api.montoya.proxy.Proxy
@@ -34,6 +36,7 @@ import net.portswigger.mcp.TestSseMcpClient
 import net.portswigger.mcp.config.McpConfig
 import net.portswigger.mcp.schema.HttpRequestResponse
 import net.portswigger.mcp.schema.toSerializableForm
+import net.portswigger.mcp.schema.toSummaryForm
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
@@ -151,6 +154,25 @@ class ToolsKtTest {
     }
 
     private fun findAvailablePort() = ServerSocket(0).use { it.localPort }
+
+    private fun mockProxyHistoryEntry(url: String): ProxyHttpRequestResponse {
+        val request = mockk<HttpRequest>()
+        every { request.url() } returns url
+        every { request.method() } returns "GET"
+        every { request.httpService() } returns mockk {
+            every { host() } returns "example.com"
+        }
+
+        val response = mockk<HttpResponse>()
+        every { response.statusCode() } returns 200.toShort()
+
+        return mockk {
+            every { hasResponse() } returns true
+            every { finalRequest() } returns request
+            every { response() } returns response
+            every { mimeType() } returns MimeType.JSON
+        }
+    }
 
     @AfterEach
     fun tearDown() {
@@ -737,9 +759,9 @@ class ToolsKtTest {
         fun `get proxy history should paginate properly`() {
             val proxy = mockk<Proxy>()
             val proxyHistory = listOf(
-                mockk<ProxyHttpRequestResponse>(),
-                mockk<ProxyHttpRequestResponse>(),
-                mockk<ProxyHttpRequestResponse>()
+                mockProxyHistoryEntry("https://example.com/item1"),
+                mockProxyHistoryEntry("https://example.com/item2"),
+                mockProxyHistoryEntry("https://example.com/item3")
             )
             
             every { api.proxy() } returns proxy
@@ -747,20 +769,20 @@ class ToolsKtTest {
             
             mockkStatic("net.portswigger.mcp.schema.SerializationKt")
             
-            every { proxyHistory[0].toSerializableForm() } returns HttpRequestResponse(
-                request = "GET /item1 HTTP/1.1",
-                response = "HTTP/1.1 200 OK",
-                notes = "Item 1 notes"
+            every { proxyHistory[0].toSummaryForm(0) } returns net.portswigger.mcp.schema.ProxyHistorySummary(
+                index = 0, id = 1, method = "GET", url = "https://example.com/item1",
+                host = "example.com", statusCode = 200, mimeType = "JSON", responseLength = 10,
+                hasParameters = false, highlight = null, notes = "Item 1 notes", time = null
             )
-            every { proxyHistory[1].toSerializableForm() } returns HttpRequestResponse(
-                request = "GET /item2 HTTP/1.1",
-                response = "HTTP/1.1 200 OK",
-                notes = "Item 2 notes"
+            every { proxyHistory[1].toSummaryForm(1) } returns net.portswigger.mcp.schema.ProxyHistorySummary(
+                index = 1, id = 2, method = "GET", url = "https://example.com/item2",
+                host = "example.com", statusCode = 200, mimeType = "JSON", responseLength = 10,
+                hasParameters = false, highlight = null, notes = "Item 2 notes", time = null
             )
-            every { proxyHistory[2].toSerializableForm() } returns HttpRequestResponse(
-                request = "GET /item3 HTTP/1.1",
-                response = "HTTP/1.1 200 OK",
-                notes = "Item 3 notes"
+            every { proxyHistory[2].toSummaryForm(2) } returns net.portswigger.mcp.schema.ProxyHistorySummary(
+                index = 2, id = 3, method = "GET", url = "https://example.com/item3",
+                host = "example.com", statusCode = 200, mimeType = "JSON", responseLength = 10,
+                hasParameters = false, highlight = null, notes = "Item 3 notes", time = null
             )
             
             runBlocking {
@@ -773,9 +795,9 @@ class ToolsKtTest {
                 
                 delay(100)
                 val text1 = result1.expectTextContent()
-                assertTrue(text1.contains("GET /item1"))
-                assertTrue(text1.contains("GET /item2"))
-                assertFalse(text1.contains("GET /item3"))
+                assertTrue(text1.contains("item1"))
+                assertTrue(text1.contains("item2"))
+                assertFalse(text1.contains("item3"))
                 
                 val result2 = client.callTool(
                     "get_proxy_http_history", mapOf(
@@ -786,7 +808,7 @@ class ToolsKtTest {
                 
                 delay(100)
                 val text2 = result2.expectTextContent()
-                assertTrue(text2.contains("GET /item3"))
+                assertTrue(text2.contains("item3"))
                 
                 val result3 = client.callTool(
                     "get_proxy_http_history", mapOf(
