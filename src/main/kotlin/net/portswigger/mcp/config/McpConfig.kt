@@ -2,12 +2,23 @@ package net.portswigger.mcp.config
 
 import burp.api.montoya.logging.Logging
 import burp.api.montoya.persistence.PersistedObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.lang.ref.WeakReference
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 private const val TARGET_SEPARATOR = "\n"
+
+@Serializable
+data class AuthIdentity(
+    val name: String,
+    val headers: List<String>
+)
+
+private val authIdentityJson = Json { ignoreUnknownKeys = true }
 
 class McpConfig(storage: PersistedObject, private val logging: Logging) {
 
@@ -49,6 +60,8 @@ class McpConfig(storage: PersistedObject, private val logging: Logging) {
         }
 
     var filterConfigCredentials by storage.boolean(true)
+
+    private var _authIdentitiesJson by storage.string("[]")
 
     private var _autoApproveTargets by storage.stringList("")
     private val targetsChangeListeners = CopyOnWriteArrayList<ListenerRegistration>()
@@ -101,6 +114,35 @@ class McpConfig(storage: PersistedObject, private val logging: Logging) {
 
     fun clearAutoApproveTargets() {
         autoApproveTargets = ""
+    }
+
+    fun setAuthIdentity(name: String, headers: List<String>): Boolean {
+        val trimmedName = name.trim()
+        if (trimmedName.isEmpty() || headers.isEmpty()) return false
+
+        val identities = getAuthIdentities().toMutableList()
+        identities.removeAll { it.name.equals(trimmedName, ignoreCase = true) }
+        identities.add(AuthIdentity(trimmedName, headers))
+        _authIdentitiesJson = authIdentityJson.encodeToString(identities)
+        return true
+    }
+
+    fun getAuthIdentities(): List<AuthIdentity> {
+        return runCatching {
+            authIdentityJson.decodeFromString<List<AuthIdentity>>(_authIdentitiesJson)
+        }.getOrDefault(emptyList())
+    }
+
+    fun getAuthIdentity(name: String): AuthIdentity? {
+        return getAuthIdentities().firstOrNull { it.name.equals(name, ignoreCase = true) }
+    }
+
+    fun deleteAuthIdentity(name: String): Boolean {
+        val identities = getAuthIdentities()
+        val updated = identities.filterNot { it.name.equals(name, ignoreCase = true) }
+        if (updated.size == identities.size) return false
+        _authIdentitiesJson = authIdentityJson.encodeToString(updated)
+        return true
     }
 
     fun addTargetsChangeListener(listener: () -> Unit): ListenerHandle {
