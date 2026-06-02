@@ -11,6 +11,14 @@ For more information about the protocol visit: [modelcontextprotocol.io](https:/
 - Connect Burp Suite to AI clients through MCP
 - Automatic installation for Claude Desktop
 - Comes with packaged Stdio MCP proxy server
+- Token-efficient proxy/site map history browsing with list-then-drill-down summaries
+- Native Autorize-style authorization testing (identities, single/batch tests)
+- Repeater workflow helpers (send + mirror to Repeater, resend history with modifications)
+- Scope management, parameter extraction, and history annotation
+- Pro-only: active scan/crawl triggers, custom audit issue reporting
+- Passive recon mining: secret scanning, JS bundle secret scanning, endpoint extraction, tech fingerprinting, parameter aggregation, attack surface mapping, security header analysis, form extraction
+- Active probing: parameter injection testing, fuzzing, class-specific injection probes, IDOR detection, response diffing, Collaborator OOB probes (Pro)
+- Protocol coverage: WebSocket send/receive, Comparer handoff
 
 ## Usage
 
@@ -141,3 +149,23 @@ The tool name is auto-derived from its parameters data class. A description is a
 a string (or richer PromptMessageContents) to provide data back to the LLM.
 
 Extend the Paginated interface to add auto-pagination support.
+
+### MCP tools (summary)
+
+**HTTP & workflow:** `send_http1_request`, `send_http2_request`, `send_and_open_repeater`, `resend_history_entry`, `create_repeater_tab`, `create_repeater_tab_http2`, `send_to_intruder`, `extract_parameters`
+
+**History & site map:** `get_proxy_http_history`, `get_proxy_http_history_regex`, `get_proxy_history_entry`, `get_site_map`, `get_site_map_entry`, `annotate_history_entry`, `get_organizer_items`, `get_organizer_items_regex`, `get_organizer_item`
+
+**Authorization testing:** `set_auth_identity`, `list_auth_identities`, `delete_auth_identity`, `test_authorization`, `test_authorization_batch`
+
+**Recon mining:** `scan_responses_for_secrets`, `extract_js_endpoints`, `fingerprint_technologies`, `aggregate_parameters`, `scan_js_bundles`, `map_attack_surface`, `analyze_security_headers`, `extract_forms_and_inputs`
+
+**Active probing:** `probe_parameter`, `fuzz_parameter`, `probe_injection`, `test_idor`, `diff_responses`, `probe_parameter_oob` (Pro)
+
+**Protocol:** `send_websocket_message`, `send_to_comparer`
+
+**Scope:** `get_scope`, `add_to_scope`, `remove_from_scope`
+
+**Scanner (Pro):** `get_scanner_issues`, `get_scanner_issue`, `start_audit`, `start_crawl`, `add_audit_issue`, `generate_collaborator_payload`, `get_collaborator_interactions`, `probe_parameter_oob`
+
+**Utilities & config:** encoding/random tools, config export/import, proxy intercept, task engine, active editor tools
