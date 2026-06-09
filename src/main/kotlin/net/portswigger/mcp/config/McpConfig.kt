@@ -59,6 +59,16 @@ class McpConfig(storage: PersistedObject, private val logging: Logging) {
             }
         }
 
+    private var _alwaysAllowSiteMap by storage.boolean(false)
+    var alwaysAllowSiteMap: Boolean
+        get() = _alwaysAllowSiteMap
+        set(value) {
+            if (_alwaysAllowSiteMap != value) {
+                _alwaysAllowSiteMap = value
+                notifyDataAccessChanged()
+            }
+        }
+
     var filterConfigCredentials by storage.boolean(true)
 
     private var _authIdentitiesJson by storage.string("[]")

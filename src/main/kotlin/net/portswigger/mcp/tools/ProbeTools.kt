@@ -387,7 +387,8 @@ fun Server.registerProbeTools(api: MontoyaApi, config: McpConfig) {
 fun Server.registerProbeOobTool(api: MontoyaApi, config: McpConfig, collaboratorClient: CollaboratorClient) {
     mcpTool<ProbeParameterOob>(
         "Injects a Burp Collaborator payload into a parameter and sends the request for out-of-band detection. " +
-            "Poll get_collaborator_interactions with the returned payloadId."
+            "Poll get_collaborator_interactions with the returned secretKey (preferred, restores this exact client) " +
+            "or payloadId."
     ) {
         val request = resolveRequestFromSource(
             api, historyIndex, rawContent, useActiveEditor,
@@ -410,6 +411,7 @@ fun Server.registerProbeOobTool(api: MontoyaApi, config: McpConfig, collaborator
                 parameterType = targetParam.type().name,
                 collaboratorPayload = payload.toString(),
                 payloadId = payload.id().toString(),
+                secretKey = collaboratorClient.secretKey.toString(),
                 statusCode = response?.statusCode()?.toInt() ?: -1
             )
         )
@@ -459,6 +461,7 @@ data class ProbeOobResult(
     val parameterType: String,
     val collaboratorPayload: String,
     val payloadId: String,
+    val secretKey: String,
     val statusCode: Int
 )
 
