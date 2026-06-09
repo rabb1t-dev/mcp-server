@@ -191,7 +191,9 @@ fun classifyReflectionContext(payload: String, responseBody: String): Pair<Refle
         else -> ReflectionContext.HTML_BODY
     }
 
-    val dangerousSurvived = payload.any { it in DANGEROUS_CHARS && responseBody.contains(it.toString()) }
+    val reflectedEnd = (index + payload.length).coerceAtMost(responseBody.length)
+    val reflectedOccurrence = responseBody.substring(index, reflectedEnd)
+    val dangerousSurvived = DANGEROUS_CHARS.any { it in payload && it in reflectedOccurrence }
     return context to dangerousSurvived
 }
 

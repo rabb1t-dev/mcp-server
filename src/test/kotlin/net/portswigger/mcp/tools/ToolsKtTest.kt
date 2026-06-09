@@ -898,13 +898,16 @@ class ToolsKtTest {
         }
 
         @Test
-        fun `generate payload should return payload and server info`() {
+        fun `generate payload should return payload, server info and secret key`() {
             val payload = mockk<CollaboratorPayload>()
             val payloadId = mockk<InteractionId>()
             every { payload.toString() } returns "abc123.burpcollaborator.net"
             every { payload.id() } returns payloadId
             every { payloadId.toString() } returns "abc123"
             every { collaboratorClient.generatePayload() } returns payload
+            val secretKey = mockk<SecretKey>()
+            every { secretKey.toString() } returns "sk-abc"
+            every { collaboratorClient.secretKey } returns secretKey
 
             runBlocking {
                 val result = client.callTool("generate_collaborator_payload", emptyMap())
@@ -912,7 +915,8 @@ class ToolsKtTest {
                 result.expectTextContent(
                     "Payload: abc123.burpcollaborator.net\n" +
                     "Payload ID: abc123\n" +
-                    "Collaborator server: burpcollaborator.net"
+                    "Collaborator server: burpcollaborator.net\n" +
+                    "Secret key: sk-abc"
                 )
             }
 
@@ -927,6 +931,9 @@ class ToolsKtTest {
             every { payload.id() } returns payloadId
             every { payloadId.toString() } returns "custom123"
             every { collaboratorClient.generatePayload(any<String>()) } returns payload
+            val secretKey = mockk<SecretKey>()
+            every { secretKey.toString() } returns "sk-custom"
+            every { collaboratorClient.secretKey } returns secretKey
 
             runBlocking {
                 val result = client.callTool(
@@ -938,7 +945,8 @@ class ToolsKtTest {
                 result.expectTextContent(
                     "Payload: custom123.burpcollaborator.net\n" +
                     "Payload ID: custom123\n" +
-                    "Collaborator server: burpcollaborator.net"
+                    "Collaborator server: burpcollaborator.net\n" +
+                    "Secret key: sk-custom"
                 )
             }
 
@@ -1034,6 +1042,33 @@ class ToolsKtTest {
             }
 
             verify(exactly = 1) { collaboratorClient.getInteractions(mockFilter) }
+        }
+
+        @Test
+        fun `get interactions with secretKey should restore client`() {
+            mockkStatic(SecretKey::class)
+            val secretKey = mockk<SecretKey>()
+            every { SecretKey.secretKey("sk-abc") } returns secretKey
+            val restoredClient = mockk<CollaboratorClient>()
+            every { collaborator.restoreClient(secretKey) } returns restoredClient
+            every { restoredClient.getAllInteractions() } returns emptyList()
+
+            try {
+                runBlocking {
+                    val result = client.callTool(
+                        "get_collaborator_interactions", mapOf(
+                            "secretKey" to "sk-abc"
+                        )
+                    )
+                    delay(100)
+                    result.expectTextContent("No interactions detected")
+                }
+
+                verify(exactly = 1) { collaborator.restoreClient(secretKey) }
+                verify(exactly = 1) { restoredClient.getAllInteractions() }
+            } finally {
+                unmockkStatic(SecretKey::class)
+            }
         }
 
         @Test

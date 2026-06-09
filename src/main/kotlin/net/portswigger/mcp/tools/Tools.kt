@@ -4,6 +4,7 @@ import burp.api.montoya.MontoyaApi
 import burp.api.montoya.burpsuite.TaskExecutionEngine.TaskExecutionEngineState.PAUSED
 import burp.api.montoya.burpsuite.TaskExecutionEngine.TaskExecutionEngineState.RUNNING
 import burp.api.montoya.collaborator.InteractionFilter
+import burp.api.montoya.collaborator.SecretKey
 import burp.api.montoya.core.BurpSuiteEdition
 import burp.api.montoya.http.HttpMode
 import burp.api.montoya.http.HttpService
@@ -272,7 +273,9 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
         mcpTool<GenerateCollaboratorPayload>(
             "Generates a Burp Collaborator payload URL for out-of-band (OOB) testing. " +
             "Inject this payload into requests to detect server-side interactions (DNS lookups, HTTP requests, SMTP). " +
-            "Use get_collaborator_interactions with the returned payloadId to check for interactions."
+            "Returns a secret key alongside the payload: pass it to get_collaborator_interactions to restore this " +
+            "client and poll its interactions later, including from a different session. " +
+            "Alternatively poll by the returned payload ID."
         ) {
             api.logging().logToOutput("MCP generating Collaborator payload${customData?.let { " with custom data" } ?: ""}")
 
@@ -283,20 +286,33 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
             }
 
             val server = collaboratorClient.server()
-            "Payload: $payload\nPayload ID: ${payload.id()}\nCollaborator server: ${server.address()}"
+            buildString {
+                appendLine("Payload: $payload")
+                appendLine("Payload ID: ${payload.id()}")
+                appendLine("Collaborator server: ${server.address()}")
+                append("Secret key: ${collaboratorClient.secretKey}")
+            }
         }
 
         mcpTool<GetCollaboratorInteractions>(
             "Polls Burp Collaborator for out-of-band interactions (DNS, HTTP, SMTP). " +
-            "Optionally filter by payloadId from generate_collaborator_payload. " +
+            "Provide the secretKey returned by generate_collaborator_payload to restore that client and see its " +
+            "interactions (required when polling from a different session); otherwise the current session client is used. " +
+            "Optionally filter by payloadId. " +
             "Returns interaction details including type, timestamp, client IP, and protocol-specific data."
         ) {
             api.logging().logToOutput("MCP polling Collaborator interactions${payloadId?.let { " for payload: $it" } ?: ""}")
 
-            val interactions = if (payloadId != null) {
-                collaboratorClient.getInteractions(InteractionFilter.interactionIdFilter(payloadId))
+            val activeClient = if (!secretKey.isNullOrBlank()) {
+                api.collaborator().restoreClient(SecretKey.secretKey(secretKey))
             } else {
-                collaboratorClient.getAllInteractions()
+                collaboratorClient
+            }
+
+            val interactions = if (payloadId != null) {
+                activeClient.getInteractions(InteractionFilter.interactionIdFilter(payloadId))
+            } else {
+                activeClient.getAllInteractions()
             }
 
             if (interactions.isEmpty()) {
@@ -605,5 +621,6 @@ data class GenerateCollaboratorPayload(
 
 @Serializable
 data class GetCollaboratorInteractions(
-    val payloadId: String? = null
+    val payloadId: String? = null,
+    val secretKey: String? = null
 )
