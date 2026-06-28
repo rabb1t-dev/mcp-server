@@ -75,6 +75,23 @@ class HistoryFiltersTest {
         assertEquals(1, filtered.size)
     }
 
+    @Test
+    fun `filterProxyHistoryForBrowse returns newest entries first`() {
+        val api = mockk<MontoyaApi>(relaxed = true)
+        val entries = listOf(
+            mockHistoryEntry("GET", "https://example.com/old"),
+            mockHistoryEntry("GET", "https://example.com/mid"),
+            mockHistoryEntry("GET", "https://example.com/new"),
+        )
+
+        val filtered = filterProxyHistoryForBrowse(entries, HistoryFilterOptions(), api)
+
+        assertEquals(3, filtered.size)
+        assertEquals(2, filtered[0].index)
+        assertEquals(1, filtered[1].index)
+        assertEquals(0, filtered[2].index)
+    }
+
     private fun mockHistoryEntry(method: String, url: String): ProxyHttpRequestResponse {
         val request = mockk<HttpRequest>()
         every { request.url() } returns url

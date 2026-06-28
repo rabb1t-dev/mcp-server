@@ -14,13 +14,31 @@ import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.mcp
 import net.portswigger.mcp.config.McpConfig
+import net.portswigger.mcp.tools.CollaboratorManager
+import net.portswigger.mcp.tools.LoggerCaptureStore
+import net.portswigger.mcp.tools.ProxyHarArchiveStore
 import net.portswigger.mcp.tools.registerTools
 import java.net.URI
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-class KtorServerManager(private val api: MontoyaApi) : ServerManager {
+class KtorServerManager(
+    private val api: MontoyaApi,
+    loggerStore: LoggerCaptureStore? = null,
+    private val archiveStore: ProxyHarArchiveStore? = null,
+    private val collaboratorManager: CollaboratorManager? = null,
+) : ServerManager {
+
+    private val loggerStore: LoggerCaptureStore = loggerStore ?: run {
+        val storage = api.persistence().extensionData()
+        LoggerCaptureStore(McpConfig(storage, api.logging()), storage)
+    }
+
+    private val resolvedArchiveStore: ProxyHarArchiveStore = archiveStore ?: ProxyHarArchiveStore(
+        api,
+        McpConfig(api.persistence().extensionData(), api.logging())
+    )
 
     private var server: EmbeddedServer<*, *>? = null
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -96,7 +114,7 @@ class KtorServerManager(private val api: MontoyaApi) : ServerManager {
                         mcpServer
                     }
 
-                    mcpServer.registerTools(api, config)
+                    mcpServer.registerTools(api, config, loggerStore, resolvedArchiveStore, collaboratorManager)
                 }.apply {
                     start(wait = false)
                 }

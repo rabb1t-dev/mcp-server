@@ -145,8 +145,14 @@ internal fun checkBypassFromValues(
         return AuthVerdict.BYPASSED
     }
 
+    if (responseSimilarity(oldBody, newBody) >= AUTORIZE_BYPASS_SIMILARITY) {
+        return AuthVerdict.BYPASSED
+    }
+
     return AuthVerdict.NEEDS_REVIEW
 }
+
+private const val AUTORIZE_BYPASS_SIMILARITY = 0.98
 
 private fun matchesEnforcementDetectors(
     response: HttpResponse,

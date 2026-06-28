@@ -8,6 +8,8 @@ import net.portswigger.mcp.ServerState
 import net.portswigger.mcp.Swing
 import net.portswigger.mcp.config.components.*
 import net.portswigger.mcp.providers.Provider
+import net.portswigger.mcp.tools.LoggerCaptureStore
+import net.portswigger.mcp.tools.ProxyHarArchiveStore
 import java.awt.BorderLayout
 import java.awt.Component.CENTER_ALIGNMENT
 import java.awt.GridBagLayout
@@ -15,7 +17,13 @@ import javax.swing.*
 import javax.swing.Box.*
 import javax.swing.JOptionPane.ERROR_MESSAGE
 
-class ConfigUi(private val config: McpConfig, private val providers: List<Provider>) {
+class ConfigUi(
+    private val config: McpConfig,
+    private val loggerStore: LoggerCaptureStore,
+    private val archiveStore: ProxyHarArchiveStore,
+    private val isProfessional: Boolean,
+    private val providers: List<Provider>,
+) {
 
     private val panel = JPanel(BorderLayout())
     val component: JComponent get() = panel
@@ -48,6 +56,8 @@ class ConfigUi(private val config: McpConfig, private val providers: List<Provid
     private lateinit var serverConfigurationPanel: ServerConfigurationPanel
     private lateinit var advancedOptionsPanel: AdvancedOptionsPanel
     private lateinit var autoApproveTargetsPanel: AutoApproveTargetsPanel
+    private lateinit var loggerCapturePanel: LoggerCapturePanel
+    private lateinit var proxyHarArchivePanel: ProxyHarArchivePanel
     private lateinit var installationPanel: InstallationPanel
 
     private var toggleListener: ((Boolean) -> Unit)? = null
@@ -78,6 +88,17 @@ class ConfigUi(private val config: McpConfig, private val providers: List<Provid
         )
 
         autoApproveTargetsPanel = AutoApproveTargetsPanel(config = config)
+
+        loggerCapturePanel = LoggerCapturePanel(
+            config = config,
+            loggerStore = loggerStore,
+            isProfessional = isProfessional,
+        )
+
+        proxyHarArchivePanel = ProxyHarArchivePanel(
+            config = config,
+            archiveStore = archiveStore,
+        )
 
         installationPanel = InstallationPanel(
             config = config, providers = providers, reinstallNotice = reinstallNotice, parentComponent = panel
@@ -196,6 +217,12 @@ class ConfigUi(private val config: McpConfig, private val providers: List<Provid
         }
 
         rightPanelContent.add(serverConfigurationPanel)
+        rightPanelContent.add(createVerticalStrut(Design.Spacing.LG))
+
+        rightPanelContent.add(loggerCapturePanel)
+        rightPanelContent.add(createVerticalStrut(Design.Spacing.LG))
+
+        rightPanelContent.add(proxyHarArchivePanel)
         rightPanelContent.add(createVerticalStrut(Design.Spacing.LG))
 
         rightPanelContent.add(autoApproveTargetsPanel)

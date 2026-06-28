@@ -117,7 +117,13 @@ private fun normalizePrelude(prelude: String): String = prelude
     .replace("\r", "")          // Actual CR → remove
     .replace("\n", "\r\n")      // All LF → proper CRLF
 
-fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
+fun Server.registerTools(
+    api: MontoyaApi,
+    config: McpConfig,
+    loggerStore: LoggerCaptureStore,
+    archiveStore: ProxyHarArchiveStore,
+    collaboratorManager: CollaboratorManager? = null,
+) {
 
     mcpTool<SendHttp1Request>("Issues an HTTP/1.1 request and returns the response.") {
         val allowed = runBlocking {
@@ -275,22 +281,34 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
             "Inject this payload into requests to detect server-side interactions (DNS lookups, HTTP requests, SMTP). " +
             "Returns a secret key alongside the payload: pass it to get_collaborator_interactions to restore this " +
             "client and poll its interactions later, including from a different session. " +
+            "The payload also appears in the MCP Collaborator suite tab. " +
             "Alternatively poll by the returned payload ID."
         ) {
             api.logging().logToOutput("MCP generating Collaborator payload${customData?.let { " with custom data" } ?: ""}")
 
-            val payload = if (customData != null) {
-                collaboratorClient.generatePayload(customData)
+            if (collaboratorManager != null) {
+                val (payload, client) = collaboratorManager.generatePayload(customData)
+                val server = client.server()
+                buildString {
+                    appendLine("Payload: $payload")
+                    appendLine("Payload ID: ${payload.id()}")
+                    appendLine("Collaborator server: ${server.address()}")
+                    append("Secret key: ${client.secretKey}")
+                }
             } else {
-                collaboratorClient.generatePayload()
-            }
+                val payload = if (customData != null) {
+                    collaboratorClient.generatePayload(customData)
+                } else {
+                    collaboratorClient.generatePayload()
+                }
 
-            val server = collaboratorClient.server()
-            buildString {
-                appendLine("Payload: $payload")
-                appendLine("Payload ID: ${payload.id()}")
-                appendLine("Collaborator server: ${server.address()}")
-                append("Secret key: ${collaboratorClient.secretKey}")
+                val server = collaboratorClient.server()
+                buildString {
+                    appendLine("Payload: $payload")
+                    appendLine("Payload ID: ${payload.id()}")
+                    appendLine("Collaborator server: ${server.address()}")
+                    append("Secret key: ${collaboratorClient.secretKey}")
+                }
             }
         }
 
@@ -326,7 +344,7 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
     }
 
     mcpPaginatedTool<GetProxyHttpHistory>(
-        "Displays lightweight summaries of proxy HTTP history entries (no bodies). " +
+        "Displays lightweight summaries of proxy HTTP history entries (no bodies), newest first. " +
             "Use get_proxy_history_entry for full request/response details."
     ) {
         val allowed = runBlocking {
@@ -346,12 +364,12 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
             uniqueEndpoints = uniqueEndpoints
         )
 
-        filterProxyHistory(api.proxy().history(), filter, api).asSequence()
+        filterProxyHistoryForBrowse(api.proxy().history(), filter, api).asSequence()
             .map { (index, entry) -> Json.encodeToString(entry.toSummaryForm(index)) }
     }
 
     mcpPaginatedTool<GetProxyHttpHistoryRegex>(
-        "Displays lightweight summaries of proxy HTTP history entries matching a full-text regex. " +
+        "Displays lightweight summaries of proxy HTTP history entries matching a full-text regex, newest first. " +
             "Use get_proxy_history_entry for full request/response details."
     ) {
         val allowed = runBlocking {
@@ -372,7 +390,7 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
         )
 
         val compiledRegex = Pattern.compile(regex)
-        filterProxyHistory(api.proxy().history(), filter, api, compiledRegex).asSequence()
+        filterProxyHistoryForBrowse(api.proxy().history(), filter, api, compiledRegex).asSequence()
             .map { (index, entry) -> Json.encodeToString(entry.toSummaryForm(index)) }
     }
 
@@ -467,8 +485,13 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
     registerPentestTools(
         api,
         config,
-        api.burpSuite().version().edition() == BurpSuiteEdition.PROFESSIONAL
+        api.burpSuite().version().edition() == BurpSuiteEdition.PROFESSIONAL,
+        collaboratorManager,
     )
+
+    registerLoggerTools(api, config, loggerStore)
+    registerRepeaterTools(api, config, loggerStore)
+    registerProxyHarTools(config, archiveStore)
 }
 
 fun getActiveEditor(api: MontoyaApi): JTextArea? {

@@ -795,9 +795,9 @@ class ToolsKtTest {
                 
                 delay(100)
                 val text1 = result1.expectTextContent()
-                assertTrue(text1.contains("item1"))
+                assertTrue(text1.contains("item3"))
                 assertTrue(text1.contains("item2"))
-                assertFalse(text1.contains("item3"))
+                assertFalse(text1.contains("item1"))
                 
                 val result2 = client.callTool(
                     "get_proxy_http_history", mapOf(
@@ -808,7 +808,7 @@ class ToolsKtTest {
                 
                 delay(100)
                 val text2 = result2.expectTextContent()
-                assertTrue(text2.contains("item3"))
+                assertTrue(text2.contains("item1"))
                 
                 val result3 = client.callTool(
                     "get_proxy_http_history", mapOf(

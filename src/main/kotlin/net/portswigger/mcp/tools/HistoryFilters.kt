@@ -115,3 +115,13 @@ fun filterProxyHistory(
         }
         .toList()
 }
+
+/** Newest-first browse order; each item keeps its original Burp history index for drill-down. */
+fun filterProxyHistoryForBrowse(
+    history: List<ProxyHttpRequestResponse>,
+    filter: HistoryFilterOptions,
+    api: MontoyaApi,
+    fullTextRegex: Pattern? = null
+): List<IndexedValue<ProxyHttpRequestResponse>> {
+    return filterProxyHistory(history, filter, api, fullTextRegex).asReversed()
+}

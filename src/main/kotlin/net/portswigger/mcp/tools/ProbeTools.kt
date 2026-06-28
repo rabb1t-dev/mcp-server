@@ -384,7 +384,12 @@ fun Server.registerProbeTools(api: MontoyaApi, config: McpConfig) {
     }
 }
 
-fun Server.registerProbeOobTool(api: MontoyaApi, config: McpConfig, collaboratorClient: CollaboratorClient) {
+fun Server.registerProbeOobTool(
+    api: MontoyaApi,
+    config: McpConfig,
+    collaboratorClient: CollaboratorClient,
+    collaboratorManager: CollaboratorManager? = null,
+) {
     mcpTool<ProbeParameterOob>(
         "Injects a Burp Collaborator payload into a parameter and sends the request for out-of-band detection. " +
             "Poll get_collaborator_interactions with the returned secretKey (preferred, restores this exact client) " +
@@ -401,7 +406,12 @@ fun Server.registerProbeOobTool(api: MontoyaApi, config: McpConfig, collaborator
         val allowed = runBlocking { checkHttpPermissionForRequest(request, config, api) }
         if (!allowed) return@mcpTool "Send HTTP request denied by Burp Suite"
 
-        val payload = collaboratorClient.generatePayload()
+        val (payload, client) = if (collaboratorManager != null) {
+            collaboratorManager.generatePayload(null)
+        } else {
+            collaboratorClient.generatePayload() to collaboratorClient
+        }
+        val secretKey = client.secretKey.toString()
         val modified = applyParameterValue(request, targetParam, payload.toString())
         val response = api.http().sendRequest(modified)?.response()
 
@@ -411,7 +421,7 @@ fun Server.registerProbeOobTool(api: MontoyaApi, config: McpConfig, collaborator
                 parameterType = targetParam.type().name,
                 collaboratorPayload = payload.toString(),
                 payloadId = payload.id().toString(),
-                secretKey = collaboratorClient.secretKey.toString(),
+                secretKey = secretKey,
                 statusCode = response?.statusCode()?.toInt() ?: -1
             )
         )

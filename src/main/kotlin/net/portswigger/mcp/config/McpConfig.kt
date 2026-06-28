@@ -71,6 +71,25 @@ class McpConfig(storage: PersistedObject, private val logging: Logging) {
 
     var filterConfigCredentials by storage.boolean(true)
 
+    var loggerCaptureEnabled by storage.boolean(true)
+    var loggerCaptureExtensions by storage.boolean(true)
+    var loggerMaxEntries by storage.int(5000)
+    var loggerPersistenceEnabled by storage.boolean(false)
+
+    var engagementDirectory by storage.string("")
+    var proxyHarAutoExportEnabled by storage.boolean(true)
+    var proxyHarBatchSize by storage.int(50)
+
+    private var _alwaysAllowLogger by storage.boolean(false)
+    var alwaysAllowLogger: Boolean
+        get() = _alwaysAllowLogger
+        set(value) {
+            if (_alwaysAllowLogger != value) {
+                _alwaysAllowLogger = value
+                notifyDataAccessChanged()
+            }
+        }
+
     private var _authIdentitiesJson by storage.string("[]")
 
     private var _autoApproveTargets by storage.stringList("")

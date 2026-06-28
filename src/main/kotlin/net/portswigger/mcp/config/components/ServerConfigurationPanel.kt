@@ -19,6 +19,7 @@ class ServerConfigurationPanel(
     private lateinit var alwaysAllowWebSocketHistoryCheckBox: JCheckBox
     private lateinit var alwaysAllowOrganizerCheckBox: JCheckBox
     private lateinit var alwaysAllowSiteMapCheckBox: JCheckBox
+    private lateinit var alwaysAllowLoggerCheckBox: JCheckBox
 
     init {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -95,6 +96,14 @@ class ServerConfigurationPanel(
             config.requireDataAccessApproval
         ) { config.alwaysAllowSiteMap = it }
         add(alwaysAllowSiteMapCheckBox)
+        add(createVerticalStrut(Design.Spacing.SM))
+
+        alwaysAllowLoggerCheckBox = createIndentedCheckBox(
+            "Always allow Logger capture access",
+            config.alwaysAllowLogger,
+            config.requireDataAccessApproval
+        ) { config.alwaysAllowLogger = it }
+        add(alwaysAllowLoggerCheckBox)
         add(createVerticalStrut(Design.Spacing.MD))
 
         val filterConfigCredentialsCheckBox = createCheckBoxWithSubtitle(
@@ -131,15 +140,18 @@ class ServerConfigurationPanel(
                 config.alwaysAllowWebSocketHistory = false
                 config.alwaysAllowOrganizer = false
                 config.alwaysAllowSiteMap = false
+                config.alwaysAllowLogger = false
                 alwaysAllowHttpHistoryCheckBox.isSelected = false
                 alwaysAllowWebSocketHistoryCheckBox.isSelected = false
                 alwaysAllowOrganizerCheckBox.isSelected = false
                 alwaysAllowSiteMapCheckBox.isSelected = false
+                alwaysAllowLoggerCheckBox.isSelected = false
             }
             alwaysAllowHttpHistoryCheckBox.isEnabled = enabled
             alwaysAllowWebSocketHistoryCheckBox.isEnabled = enabled
             alwaysAllowOrganizerCheckBox.isEnabled = enabled
             alwaysAllowSiteMapCheckBox.isEnabled = enabled
+            alwaysAllowLoggerCheckBox.isEnabled = enabled
         }
     }
 
@@ -149,6 +161,7 @@ class ServerConfigurationPanel(
             alwaysAllowWebSocketHistoryCheckBox.isSelected = config.alwaysAllowWebSocketHistory
             alwaysAllowOrganizerCheckBox.isSelected = config.alwaysAllowOrganizer
             alwaysAllowSiteMapCheckBox.isSelected = config.alwaysAllowSiteMap
+            alwaysAllowLoggerCheckBox.isSelected = config.alwaysAllowLogger
         }
     }
 

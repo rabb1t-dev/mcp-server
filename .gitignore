@@ -37,3 +37,6 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Local operator guide (never commit) ###
+CLAUDE.md

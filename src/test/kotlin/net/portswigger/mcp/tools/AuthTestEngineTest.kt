@@ -48,4 +48,14 @@ class AuthTestEngineTest {
             checkBypassFromValues(200, 200, "secret", "You are not authorized", modified, detectors, DetectorLogic.OR)
         )
     }
+
+    @Test
+    fun `checkBypass returns bypassed when bodies are highly similar`() {
+        val almostSame = "a".repeat(1000) + "x"
+        val original = "a".repeat(1000) + "y"
+        assertEquals(
+            AuthVerdict.BYPASSED,
+            checkBypassFromValues(200, 200, original, almostSame, null, emptyList(), DetectorLogic.AND)
+        )
+    }
 }

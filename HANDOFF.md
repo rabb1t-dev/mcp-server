@@ -4,32 +4,40 @@ Audience: a dev agent picking up this fork. This document explains what was buil
 
 ## 1. Status at a glance
 
-- Base: upstream `origin/main` at v1.3.0 (commit `5f76126`).
-- All pentest work is LOCAL and UNCOMMITTED (modified + untracked). Nothing has been committed or pushed.
-- Build: `./gradlew test embedProxyJar` is green. 153 tests pass. Output jar: `build/libs/burp-mcp-all.jar`.
+- Base: fork of [alanhacksthings/mcp-server](https://github.com/alanhacksthings/mcp-server) (upstream PortSwigger v1.3.0 lineage).
+- Build: `./gradlew test embedProxyJar` is green. Output jar: `build/libs/burp-mcp-all.jar`.
 - Tech: Kotlin Burp extension (Montoya API) + embedded SSE MCP server (Ktor), tools registered via `mcpTool`/`mcpPaginatedTool`.
 
-### New source files (all under `src/main/kotlin/net/portswigger/mcp/tools/`)
+### New source files (all under `src/main/kotlin/net/portswigger/mcp/` unless noted)
 
 | File | Role |
 |---|---|
-| `HistoryFilters.kt` | Filter options, endpoint normalization, static-asset detection |
-| `RequestResolver.kt` | Unified request source: history index / raw content / active editor |
-| `AuthTestEngine.kt` | Identity replay, enforcement detectors, bypass logic |
-| `PentestTools.kt` | Registration hub + history/auth/repeater/scope/Pro tools |
-| `ReconPatterns.kt` | Pure matchers: secrets, JS endpoints, error sigs, similarity, IDOR |
-| `ReconTools.kt` | Recon tools (secrets, endpoints, fingerprint, params, JS bundles, attack surface, headers, forms) |
-| `ReconAnalysis.kt` | Pure: security-header analysis, HTML form parsing, attack-surface hints |
-| `ProbeTools.kt` | Active probing: probe_parameter, test_idor, fuzz_parameter, probe_injection, diff_responses, OOB |
-| `ProbeSignatures.kt` | Pure: payload sets, reflection/SSTI/redirect/timing/LFI/CMDi detectors, verdict engine |
-| `JsSecretPatterns.kt` | Pure: SecretFinder-style regex set, Shannon entropy, source-map extraction |
-| `DiffResponses.kt` | Pure: `diffResponses` helper + `ResponseDiff` DTO |
-| `ProtocolTools.kt` | WebSocket send + Comparer handoff |
+| `tools/HistoryFilters.kt` | Filter options, endpoint normalization, static-asset detection |
+| `tools/RequestResolver.kt` | Unified request source: history index / raw content / active editor |
+| `tools/AuthTestEngine.kt` | Identity replay, enforcement detectors, bypass logic (98% similarity) |
+| `tools/PentestTools.kt` | Registration hub + history/auth/repeater/scope/Pro tools; parallel auth batch |
+| `tools/ReconPatterns.kt` | Pure matchers: secrets, JS endpoints, error sigs, similarity, IDOR |
+| `tools/ReconTools.kt` | Recon tools |
+| `tools/ReconAnalysis.kt` | Pure: security-header analysis, HTML form parsing, attack-surface hints |
+| `tools/ProbeTools.kt` | Active probing + OOB |
+| `tools/ProbeSignatures.kt` | Pure: payload sets, detectors, verdict engine |
+| `tools/JsSecretPatterns.kt` | Pure: SecretFinder-style regex set |
+| `tools/DiffResponses.kt` | Pure: `diffResponses` helper |
+| `tools/ProtocolTools.kt` | WebSocket send + Comparer handoff |
+| `tools/LoggerCapture.kt` | HttpHandler cross-tool capture store |
+| `tools/LoggerTools.kt` | MCP logger tools |
+| `tools/RepeaterTools.kt` | First-class Repeater capture MCP tools |
+| `tools/HarExport.kt` | Pure HAR 1.2 serialization |
+| `tools/ProxyHarArchive.kt` | Auto/on-demand proxy history HAR export |
+| `tools/CollaboratorManager.kt` | Shared Collaborator client + polling cache |
+| `config/components/CollaboratorSuiteTab.kt` | User-visible MCP Collaborator suite tab (Pro) |
+| `config/components/ProxyHarArchivePanel.kt` | Engagement dir + auto-export settings |
+| `config/components/LoggerCapturePanel.kt` | Logger capture settings |
 
-Modified: `Tools.kt` (registers pentest tools; summary list tools), `McpConfig.kt` (auth identities), `schema/serialization.kt` (summary DTOs), `README.md`, `BappDescription.html`, `ToolsKtTest.kt`.
+Modified: `Tools.kt`, `ExtensionBase.kt`, `KtorServerManager.kt`, `McpConfig.kt`, `ConfigUi.kt`, `schema/serialization.kt`, `README.md`, `CLAUDE.md`, tests.
 
 ### Test files
-`ReconPatternsTest`, `ProbeAnalysisTest`, `ProbeSignaturesTest`, `JsSecretPatternsTest`, `DiffResponsesTest`, `ReconAnalysisTest`, `HistoryFiltersTest`, `AuthTestEngineTest`, `McpConfigAuthIdentityTest`, `PentestToolsKtTest`.
+`ReconPatternsTest`, `ProbeAnalysisTest`, `ProbeSignaturesTest`, `JsSecretPatternsTest`, `DiffResponsesTest`, `ReconAnalysisTest`, `HistoryFiltersTest`, `AuthTestEngineTest`, `McpConfigAuthIdentityTest`, `PentestToolsKtTest`, `LoggerCaptureTest`, `LoggerToolsKtTest`.
 
 ## 2. Architecture conventions (follow these)
 
@@ -100,9 +108,12 @@ Load `build/libs/burp-mcp-all.jar` in Burp (Extensions > Add > Java) to manually
 ## 6. Tool inventory (new in this fork)
 
 - History/site map: `get_proxy_history_entry`, `get_organizer_item`, `get_site_map_entry`, `annotate_history_entry`, `get_site_map`
+- Repeater capture: `get_repeater_history`, `get_repeater_history_regex`, `get_repeater_history_entry`
+- Proxy HAR: `export_proxy_history_har`, `get_proxy_har_archive_status`
+- Logger: `get_logger_history`, `get_logger_history_regex`, `get_logger_history_entry`, `clear_logger_capture`
 - Auth: `set_auth_identity`, `list_auth_identities`, `delete_auth_identity`, `test_authorization`, `test_authorization_batch`
 - Workflow/scope: `send_and_open_repeater`, `resend_history_entry`, `extract_parameters`, `get_scope`, `add_to_scope`, `remove_from_scope`
 - Recon: `scan_responses_for_secrets`, `extract_js_endpoints`, `fingerprint_technologies`, `aggregate_parameters`, `scan_js_bundles`, `map_attack_surface`, `analyze_security_headers`, `extract_forms_and_inputs`
 - Probing: `probe_parameter`, `fuzz_parameter`, `probe_injection`, `test_idor`, `diff_responses`, `probe_parameter_oob` (Pro)
 - Protocol: `send_websocket_message`, `send_to_comparer`
-- Pro scanner: `get_scanner_issue`, `start_audit`, `start_crawl`, `add_audit_issue`
+- Pro scanner/collaborator: `get_scanner_issue`, `start_audit`, `start_crawl`, `add_audit_issue`, `generate_collaborator_payload`, `get_collaborator_interactions` + **MCP Collaborator** suite tab (Pro)

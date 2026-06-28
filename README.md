@@ -14,6 +14,9 @@ For more information about the protocol visit: [modelcontextprotocol.io](https:/
 - Token-efficient proxy/site map history browsing with list-then-drill-down summaries
 - Native Autorize-style authorization testing (identities, single/batch tests)
 - Repeater workflow helpers (send + mirror to Repeater, resend history with modifications)
+- **Repeater capture:** first-class `get_repeater_history*` tools (sent Repeater traffic via HttpHandler; idle unsent tabs are not readable via Montoya)
+- **Proxy HAR archive:** on-demand export + auto-export batches to `{engagement directory}/proxy-archives/` (Burp proxy history is never deleted by the extension)
+- **MCP Collaborator suite tab (Pro):** user-visible payload/interaction panel alongside MCP Collaborator tools
 - Scope management, parameter extraction, and history annotation
 - Pro-only: active scan/crawl triggers, custom audit issue reporting
 - Passive recon mining: secret scanning, JS bundle secret scanning, endpoint extraction, tech fingerprinting, parameter aggregation, attack surface mapping, security header analysis, form extraction
@@ -74,6 +77,8 @@ Configuration for the extension is done through the Burp Suite UI in the `MCP` t
 - **Toggle the MCP Server**: The `Enabled` checkbox controls whether the MCP server is active.
 - **Enable config editing**: The `Enable tools that can edit your config` checkbox allows the MCP server to expose tools which can edit Burp configuration files.
 - **Advanced options**: You can configure the port and host for the MCP server. By default, it listens on `http://127.0.0.1:9876`.
+- **Proxy HAR Archive**: Set your **engagement directory** (archives land in `proxy-archives/` beneath it). Auto-export is on by default (batch size 50). Export before manually clearing Burp proxy history.
+- **Logger Capture**: Cross-tool HTTP capture for MCP queries (see MCP tab).
 
 ### Claude Desktop Client
 
@@ -154,9 +159,15 @@ Extend the Paginated interface to add auto-pagination support.
 
 **HTTP & workflow:** `send_http1_request`, `send_http2_request`, `send_and_open_repeater`, `resend_history_entry`, `create_repeater_tab`, `create_repeater_tab_http2`, `send_to_intruder`, `extract_parameters`
 
+**Repeater capture:** `get_repeater_history`, `get_repeater_history_regex`, `get_repeater_history_entry` — sent Repeater traffic only (forward-only from extension load)
+
 **History & site map:** `get_proxy_http_history`, `get_proxy_http_history_regex`, `get_proxy_history_entry`, `get_site_map`, `get_site_map_entry`, `annotate_history_entry`, `get_organizer_items`, `get_organizer_items_regex`, `get_organizer_item`
 
-**Authorization testing:** `set_auth_identity`, `list_auth_identities`, `delete_auth_identity`, `test_authorization`, `test_authorization_batch`
+**Proxy HAR archive:** `export_proxy_history_har`, `get_proxy_har_archive_status` — auto-export configured in MCP tab (engagement directory + batch size)
+
+**Logger capture (cross-tool):** `get_logger_history`, `get_logger_history_regex`, `get_logger_history_entry`, `clear_logger_capture` — captures Scanner/Repeater/Intruder/Extensions/Proxy traffic forward-only from extension load; optional Pro project persistence (opt-in, default off)
+
+**Authorization testing:** `set_auth_identity`, `list_auth_identities`, `delete_auth_identity`, `test_authorization`, `test_authorization_batch` — batch uses parallel sends (5 concurrent) with one approval prompt per unique host:port; Autorize-style 98% body-similarity bypass detection
 
 **Recon mining:** `scan_responses_for_secrets`, `extract_js_endpoints`, `fingerprint_technologies`, `aggregate_parameters`, `scan_js_bundles`, `map_attack_surface`, `analyze_security_headers`, `extract_forms_and_inputs`
 
@@ -166,6 +177,6 @@ Extend the Paginated interface to add auto-pagination support.
 
 **Scope:** `get_scope`, `add_to_scope`, `remove_from_scope`
 
-**Scanner (Pro):** `get_scanner_issues`, `get_scanner_issue`, `start_audit`, `start_crawl`, `add_audit_issue`, `generate_collaborator_payload`, `get_collaborator_interactions`, `probe_parameter_oob`
+**Scanner (Pro):** `get_scanner_issues`, `get_scanner_issue`, `start_audit`, `start_crawl`, `add_audit_issue`, `generate_collaborator_payload`, `get_collaborator_interactions`, `probe_parameter_oob` — payloads/interactions also appear in the **MCP Collaborator** suite tab
 
 **Utilities & config:** encoding/random tools, config export/import, proxy intercept, task engine, active editor tools

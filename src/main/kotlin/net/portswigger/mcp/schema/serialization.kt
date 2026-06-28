@@ -9,6 +9,36 @@ import burp.api.montoya.proxy.ProxyWebSocketMessage
 import burp.api.montoya.scanner.audit.issues.AuditIssue
 import burp.api.montoya.websocket.Direction
 import kotlinx.serialization.Serializable
+import net.portswigger.mcp.tools.LoggerEntry
+
+fun LoggerEntry.toSummaryForm(): LoggerHistorySummary {
+    val request = request
+    val response = response
+    return LoggerHistorySummary(
+        index = index,
+        messageId = messageId,
+        toolType = toolType,
+        method = request.method(),
+        url = runCatching { request.url() }.getOrNull() ?: "<unknown>",
+        host = request.httpService()?.host() ?: "<unknown>",
+        statusCode = response?.statusCode()?.toInt() ?: -1,
+        mimeType = response?.let { runCatching { it.mimeType().toString() }.getOrNull() },
+        responseLength = response?.body()?.length() ?: 0,
+        hasParameters = request.hasParameters(),
+        time = timestampMs.toString(),
+    )
+}
+
+fun LoggerEntry.toLoggerEntryDetails(): LoggerEntryDetails {
+    return LoggerEntryDetails(
+        index = index,
+        messageId = messageId,
+        toolType = toolType,
+        timestampMs = timestampMs,
+        request = request.toString(),
+        response = response?.toString(),
+    )
+}
 
 fun AuditIssue.toSerializableForm(): IssueDetails {
     return IssueDetails(
@@ -215,6 +245,31 @@ data class ProxyHistorySummary(
     val highlight: String?,
     val notes: String?,
     val time: String?
+)
+
+@Serializable
+data class LoggerHistorySummary(
+    val index: Int,
+    val messageId: Int,
+    val toolType: String,
+    val method: String,
+    val url: String,
+    val host: String,
+    val statusCode: Int,
+    val mimeType: String?,
+    val responseLength: Int,
+    val hasParameters: Boolean,
+    val time: String,
+)
+
+@Serializable
+data class LoggerEntryDetails(
+    val index: Int,
+    val messageId: Int,
+    val toolType: String,
+    val timestampMs: Long,
+    val request: String,
+    val response: String?,
 )
 
 @Serializable
