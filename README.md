@@ -157,7 +157,7 @@ Extend the Paginated interface to add auto-pagination support.
 
 ### MCP tools (summary)
 
-**HTTP & workflow:** `send_http1_request`, `send_http2_request`, `send_and_open_repeater`, `resend_history_entry`, `create_repeater_tab`, `create_repeater_tab_http2`, `send_to_intruder`, `extract_parameters`
+**HTTP & workflow:** `send_http1_request`, `send_http2_request`, `send_and_open_repeater`, `resend_history_entry`, `create_repeater_tab`, `create_repeater_tab_http2`, `send_to_intruder`, `extract_parameters`, `list_repeater_tabs`, `get_repeater_tab`
 
 **Repeater capture:** `get_repeater_history`, `get_repeater_history_regex`, `get_repeater_history_entry` — sent Repeater traffic only (forward-only from extension load)
 

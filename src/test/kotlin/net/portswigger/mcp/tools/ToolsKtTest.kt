@@ -752,6 +752,73 @@ class ToolsKtTest {
             verify(exactly = 1) { textArea.text = "New content" }
         }
     }
+
+    @Nested
+    inner class RepeaterInspectionTests {
+        @Test
+        fun `get repeater tab should return not found message when no match`() {
+            mockkStatic("net.portswigger.mcp.tools.RepeaterInspectionToolsKt")
+
+            every { findRepeaterTabContent(api, "MyTab1") } returns null
+
+            runBlocking {
+                val result = client.callTool("get_repeater_tab", mapOf("tabName" to "MyTab1"))
+
+                delay(100)
+                result.expectTextContent(
+                    "No Repeater tab found with name 'MyTab1'. Use list_repeater_tabs to see available tab names."
+                )
+            }
+        }
+
+        @Test
+        fun `get repeater tab should return request and response content`() {
+            mockkStatic("net.portswigger.mcp.tools.RepeaterInspectionToolsKt")
+
+            every { findRepeaterTabContent(api, "MyTab1") } returns RepeaterTabContent(
+                tabTitle = "MyTab1",
+                request = "GET / HTTP/1.1",
+                response = "HTTP/1.1 200 OK"
+            )
+
+            runBlocking {
+                val result = client.callTool("get_repeater_tab", mapOf("tabName" to "MyTab1"))
+
+                delay(100)
+                result.expectTextContent(
+                    "Repeater tab: MyTab1\n\n--- Request ---\nGET / HTTP/1.1\n\n--- Response ---\nHTTP/1.1 200 OK\n"
+                )
+            }
+        }
+
+        @Test
+        fun `list repeater tabs should handle no tabs found`() {
+            mockkStatic("net.portswigger.mcp.tools.RepeaterInspectionToolsKt")
+
+            every { findRepeaterTabTitles(api) } returns emptyList()
+
+            runBlocking {
+                val result = client.callTool("list_repeater_tabs", emptyMap())
+
+                delay(100)
+                result.expectTextContent("No Repeater tabs were found. They must be open in Burp's UI to be discovered.")
+            }
+        }
+
+        @Test
+        fun `list repeater tabs should return tab names`() {
+            mockkStatic("net.portswigger.mcp.tools.RepeaterInspectionToolsKt")
+
+            every { findRepeaterTabTitles(api) } returns listOf("MyTab1", "MyTab2")
+
+            runBlocking {
+                val result = client.callTool("list_repeater_tabs", emptyMap())
+
+                delay(100)
+                result.expectTextContent("MyTab1\nMyTab2")
+            }
+        }
+    }
     
     @Nested
     inner class PaginatedToolsTests {

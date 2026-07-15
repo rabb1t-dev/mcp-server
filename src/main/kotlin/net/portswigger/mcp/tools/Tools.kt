@@ -189,6 +189,8 @@ fun Server.registerTools(
         api.repeater().sendToRepeater(request, tabName)
     }
 
+    registerRepeaterInspectionTools(api, config)
+
     mcpTool<SendToIntruder>("Sends an HTTP request to Intruder with the specified HTTP request and optional tab name. Make sure to use carriage returns appropriately.") {
         val fixedContent = normalizeHttpContent(content)
         val request = HttpRequest.httpRequest(toMontoyaService(), fixedContent)
