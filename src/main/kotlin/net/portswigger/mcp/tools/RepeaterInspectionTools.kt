@@ -19,7 +19,16 @@ import javax.swing.SwingUtilities
  * find a tab whose title matches, then pull the raw text out of its request/response editors.
  *
  * This is inherently a best-effort UI-scraping approach and may break across Burp UI versions. It requires the tab
- * to actually exist (and have been rendered) in the running Burp instance.
+ * to actually exist in the running Burp instance. Two Burp UI quirks make this trickier than a plain tab search:
+ *
+ * - Only the *currently selected* Repeater tab has its request/response editor fully realized; other tabs are
+ *   lightweight stubs until clicked. We work around this for [get_repeater_tab][findRepeaterTabContent] by
+ *   temporarily selecting the target tab (restoring the previous selection afterward).
+ * - A structural "does this contain a request/response split" check is too promiscuous to use for *enumerating*
+ *   tabs: it also matches Burp's own top-level "Repeater" suite tab (which obviously contains such a split
+ *   somewhere deep inside) and small single-tab "Request"/"Response" wrapper panes used purely for styling inside
+ *   a single editor. [findRepeaterTabTitles] instead identifies the tab *strip* itself, then returns every tab it
+ *   has, rather than filtering tab-by-tab.
  */
 data class RepeaterTabContent(
     val tabTitle: String,
@@ -65,41 +74,108 @@ fun Server.registerRepeaterInspectionTools(api: MontoyaApi, config: McpConfig) {
 @Serializable
 data class GetRepeaterTab(val tabName: String)
 
+/**
+ * Reads a tab's content by title. If the matching tab isn't currently selected (and so hasn't been realized by
+ * Burp yet), it's temporarily selected to force Burp to materialize its editors, then the previous selection is
+ * restored so the user's Burp UI ends up looking the way it did before this call.
+ */
 internal fun findRepeaterTabContent(api: MontoyaApi, tabName: String): RepeaterTabContent? {
     val frame = api.userInterface().swingUtils().suiteFrame()
     val matches = findTabMatches(frame, tabName)
-    val match = matches.firstOrNull { isMessageEditorTab(it.component) } ?: matches.firstOrNull() ?: return null
+    if (matches.isEmpty()) return null
 
-    val panes = findRequestResponsePanes(match.component)
-    val request = panes?.first?.let { extractEditorText(it) }
-    val response = panes?.second?.let { extractEditorText(it) }
+    val match = matches.firstOrNull { it.component?.let(::isMessageEditorTab) == true } ?: matches.first()
 
-    return RepeaterTabContent(match.title, request, response)
+    val previousIndex = match.pane.selectedIndex
+    val needsActivation = previousIndex != match.index
+    if (needsActivation) match.pane.selectedIndex = match.index
+
+    try {
+        val panes = match.component?.let { findRequestResponsePanes(it) }
+        val request = panes?.first?.let { extractEditorText(it) }
+        val response = panes?.second?.let { extractEditorText(it) }
+        return RepeaterTabContent(match.title, request, response)
+    } finally {
+        if (needsActivation) match.pane.selectedIndex = previousIndex
+    }
 }
 
+/**
+ * Enumerates every tab on the Repeater tab strip, regardless of whether each one is currently realized. Title
+ * strings are stored on the JTabbedPane model itself and are available for every tab immediately - unlike the
+ * request/response editors, which are only built for the currently selected tab - so unlike content extraction,
+ * enumeration doesn't need to activate anything.
+ */
 internal fun findRepeaterTabTitles(api: MontoyaApi): List<String> {
     val frame = api.userInterface().swingUtils().suiteFrame()
-    val titles = mutableListOf<String>()
+    val strip = findRepeaterTabStrip(frame) ?: return emptyList()
 
-    fun visit(component: Component) {
-        if (component is JTabbedPane) {
-            for (i in 0 until component.tabCount) {
-                val content = component.getComponentAt(i)
-                if (content != null && isMessageEditorTab(content)) {
-                    titles += tabTitleAt(component, i)
-                }
-            }
-        }
-        if (component is Container) {
-            component.components.forEach(::visit)
+    return (0 until strip.tabCount).map { tabTitleAt(strip, it) }
+}
+
+private val KNOWN_BURP_TOOL_TAB_TITLES = setOf(
+    "Target", "Proxy", "Intruder", "Repeater", "Sequencer", "Decoder", "Comparer", "Logger", "Organizer", "Extensions"
+)
+
+/**
+ * Finds Burp's own main tool-switcher tab strip (Dashboard/Target/Proxy/.../Repeater/...) if the current UI uses a
+ * classic JTabbedPane for it, and returns the content of its "Repeater" tab. Scoping subsequent searches to this
+ * panel avoids confusing Burp's fixed set of ~10 main tool tabs (or small nested sub-tabs inside a single editor,
+ * e.g. a single-tab "Request"/"Response" wrapper used purely for styling) with the actual user-named Repeater tab
+ * strip. Returns null if this signature isn't found (e.g. a future Burp UI that doesn't use a JTabbedPane for the
+ * main tool switcher), in which case callers fall back to searching the whole frame.
+ */
+private fun findRepeaterToolPanel(root: Component): Component? {
+    if (root is JTabbedPane) {
+        val titles = (0 until root.tabCount).map { tabTitleAt(root, it) }
+        val knownToolTabCount = titles.count { it in KNOWN_BURP_TOOL_TAB_TITLES }
+        val repeaterIndex = titles.indexOf("Repeater")
+
+        if (knownToolTabCount >= 2 && repeaterIndex >= 0) {
+            return root.getComponentAt(repeaterIndex)
         }
     }
 
-    visit(frame)
-    return titles.distinct()
+    if (root is Container) {
+        for (child in root.components) {
+            findRepeaterToolPanel(child)?.let { return it }
+        }
+    }
+
+    return null
 }
 
-private data class TabMatch(val title: String, val component: Component)
+/**
+ * Finds the JTabbedPane that holds the individual, user-named Repeater tabs. Scoped to the Repeater tool's own
+ * panel when it can be located (see [findRepeaterToolPanel]); within that scope, picks the JTabbedPane with the
+ * most tabs among those with at least one tab that looks like a message editor - a user with several dozen
+ * Repeater tabs open will dwarf any small nested "Request"/"Response" wrapper panes (usually just one tab each).
+ */
+private fun findRepeaterTabStrip(root: Component): JTabbedPane? {
+    val scopedRoot = findRepeaterToolPanel(root) ?: root
+    return collectQualifyingTabbedPanes(scopedRoot).maxByOrNull { it.tabCount }
+}
+
+private fun collectQualifyingTabbedPanes(root: Component): List<JTabbedPane> {
+    val results = mutableListOf<JTabbedPane>()
+
+    if (root is JTabbedPane) {
+        val hasMessageEditorTab = (0 until root.tabCount).any { i ->
+            root.getComponentAt(i)?.let(::isMessageEditorTab) == true
+        }
+        if (hasMessageEditorTab) results += root
+    }
+
+    if (root is Container) {
+        root.components.forEach { results += collectQualifyingTabbedPanes(it) }
+    }
+
+    return results
+}
+
+private data class TabMatch(val title: String, val pane: JTabbedPane, val index: Int) {
+    val component: Component? get() = pane.getComponentAt(index)
+}
 
 private fun findTabMatches(root: Component, tabName: String): List<TabMatch> {
     val exact = mutableListOf<TabMatch>()
@@ -109,10 +185,9 @@ private fun findTabMatches(root: Component, tabName: String): List<TabMatch> {
         if (component is JTabbedPane) {
             for (i in 0 until component.tabCount) {
                 val title = tabTitleAt(component, i)
-                val content = component.getComponentAt(i) ?: continue
                 when {
-                    title == tabName -> exact += TabMatch(title, content)
-                    title.equals(tabName, ignoreCase = true) -> caseInsensitive += TabMatch(title, content)
+                    title == tabName -> exact += TabMatch(title, component, i)
+                    title.equals(tabName, ignoreCase = true) -> caseInsensitive += TabMatch(title, component, i)
                 }
             }
         }
