@@ -198,4 +198,61 @@ class RepeaterInspectionToolsTest {
 
         assertEquals(2, strip.selectedIndex)
     }
+
+    @Test
+    fun `close repeater tab removes the matching tab`() {
+        val api = mockApi(buildSimpleFrame())
+
+        val result = closeRepeaterTabs(api, "MyTab1", closeAll = false)
+
+        assertEquals(1, result.closedCount)
+        assertEquals(1, result.totalMatches)
+        assertNull(findRepeaterTabContent(api, "MyTab1"))
+    }
+
+    @Test
+    fun `close repeater tab matches case-insensitively when no exact match exists`() {
+        val api = mockApi(buildSimpleFrame())
+
+        val result = closeRepeaterTabs(api, "mytab1", closeAll = false)
+
+        assertEquals(1, result.closedCount)
+        assertEquals(1, result.totalMatches)
+    }
+
+    @Test
+    fun `close repeater tab reports no matches when the tab does not exist`() {
+        val api = mockApi(buildSimpleFrame())
+
+        val result = closeRepeaterTabs(api, "DoesNotExist", closeAll = false)
+
+        assertEquals(0, result.closedCount)
+        assertEquals(0, result.totalMatches)
+    }
+
+    @Test
+    fun `close repeater tab closes only the first match by default, leaving others and indices intact`() {
+        val (frame, strip) = buildBurpLikeFrame(listOf("A", "Dup", "B", "Dup", "C"), initialSelectedIndex = 0)
+        val api = mockApi(frame)
+
+        val result = closeRepeaterTabs(api, "Dup", closeAll = false)
+
+        assertEquals(1, result.closedCount)
+        assertEquals(2, result.totalMatches)
+        val remainingTitles = (0 until strip.tabCount).map { strip.getTitleAt(it) }
+        assertEquals(listOf("A", "B", "Dup", "C", "__wrapperHost"), remainingTitles)
+    }
+
+    @Test
+    fun `close repeater tab with closeAll removes every matching tab without disturbing others`() {
+        val (frame, strip) = buildBurpLikeFrame(listOf("A", "Dup", "B", "Dup", "C"), initialSelectedIndex = 0)
+        val api = mockApi(frame)
+
+        val result = closeRepeaterTabs(api, "Dup", closeAll = true)
+
+        assertEquals(2, result.closedCount)
+        assertEquals(2, result.totalMatches)
+        val remainingTitles = (0 until strip.tabCount).map { strip.getTitleAt(it) }
+        assertEquals(listOf("A", "B", "C", "__wrapperHost"), remainingTitles)
+    }
 }

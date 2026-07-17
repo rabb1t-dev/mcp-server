@@ -818,6 +818,64 @@ class ToolsKtTest {
                 result.expectTextContent("MyTab1\nMyTab2")
             }
         }
+
+        @Test
+        fun `close repeater tab should return not found message when no match`() {
+            mockkStatic("net.portswigger.mcp.tools.RepeaterInspectionToolsKt")
+
+            every { closeRepeaterTabs(api, "MyTab1", false) } returns CloseRepeaterTabsResult(closedCount = 0, totalMatches = 0)
+
+            runBlocking {
+                val result = client.callTool("close_repeater_tab", mapOf("tabName" to "MyTab1"))
+
+                delay(100)
+                result.expectTextContent(
+                    "No Repeater tab found with name 'MyTab1'. Use list_repeater_tabs to see available tab names."
+                )
+            }
+        }
+
+        @Test
+        fun `close repeater tab should report success when the tab is closed`() {
+            mockkStatic("net.portswigger.mcp.tools.RepeaterInspectionToolsKt")
+
+            every { closeRepeaterTabs(api, "MyTab1", false) } returns CloseRepeaterTabsResult(closedCount = 1, totalMatches = 1)
+
+            runBlocking {
+                val result = client.callTool("close_repeater_tab", mapOf("tabName" to "MyTab1"))
+
+                delay(100)
+                result.expectTextContent("Closed 1 Repeater tab(s) named 'MyTab1'.")
+            }
+        }
+
+        @Test
+        fun `close repeater tab should report partial closure when closeAll is false and duplicates exist`() {
+            mockkStatic("net.portswigger.mcp.tools.RepeaterInspectionToolsKt")
+
+            every { closeRepeaterTabs(api, "Dup", false) } returns CloseRepeaterTabsResult(closedCount = 1, totalMatches = 2)
+
+            runBlocking {
+                val result = client.callTool("close_repeater_tab", mapOf("tabName" to "Dup"))
+
+                delay(100)
+                result.expectTextContent("Closed 1 of 2 Repeater tabs named 'Dup'. Pass closeAll=true to close the rest.")
+            }
+        }
+
+        @Test
+        fun `close repeater tab should close every matching tab when closeAll is true`() {
+            mockkStatic("net.portswigger.mcp.tools.RepeaterInspectionToolsKt")
+
+            every { closeRepeaterTabs(api, "Dup", true) } returns CloseRepeaterTabsResult(closedCount = 2, totalMatches = 2)
+
+            runBlocking {
+                val result = client.callTool("close_repeater_tab", mapOf("tabName" to "Dup", "closeAll" to true))
+
+                delay(100)
+                result.expectTextContent("Closed 2 Repeater tab(s) named 'Dup'.")
+            }
+        }
     }
     
     @Nested

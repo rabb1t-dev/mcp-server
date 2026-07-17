@@ -69,10 +69,32 @@ fun Server.registerRepeaterInspectionTools(api: MontoyaApi, config: McpConfig) {
             appendLine(result.response ?: "<No response, or could not read response content>")
         }
     }
+
+    mcpTool<CloseRepeaterTab>(
+        "Closes an existing Repeater tab identified by its name/title, discarding any unsaved draft content in " +
+            "it. Matches an exact name first, falling back to case-insensitive. If multiple tabs share that name, " +
+            "only the first match is closed unless closeAll is set. Use list_repeater_tabs to see available tab names."
+    ) {
+        val result = runOnEdt { closeRepeaterTabs(api, tabName, closeAll) }
+
+        when {
+            result.totalMatches == 0 ->
+                "No Repeater tab found with name '$tabName'. Use list_repeater_tabs to see available tab names."
+
+            result.closedCount == result.totalMatches ->
+                "Closed ${result.closedCount} Repeater tab(s) named '$tabName'."
+
+            else ->
+                "Closed 1 of ${result.totalMatches} Repeater tabs named '$tabName'. Pass closeAll=true to close the rest."
+        }
+    }
 }
 
 @Serializable
 data class GetRepeaterTab(val tabName: String)
+
+@Serializable
+data class CloseRepeaterTab(val tabName: String, val closeAll: Boolean = false)
 
 /**
  * Reads a tab's content by title. If the matching tab isn't currently selected (and so hasn't been realized by
@@ -98,6 +120,28 @@ internal fun findRepeaterTabContent(api: MontoyaApi, tabName: String): RepeaterT
     } finally {
         if (needsActivation) match.pane.selectedIndex = previousIndex
     }
+}
+
+data class CloseRepeaterTabsResult(val closedCount: Int, val totalMatches: Int)
+
+/**
+ * Closes one or more tabs matching the given title. By default only the first match is closed (mirroring the
+ * exact-then-case-insensitive preference used elsewhere); pass closeAll to close every matching tab. When closing
+ * multiple tabs that live on the same JTabbedPane, they're removed from the highest index down so that removing one
+ * doesn't shift the indices of the others still pending removal.
+ */
+internal fun closeRepeaterTabs(api: MontoyaApi, tabName: String, closeAll: Boolean): CloseRepeaterTabsResult {
+    val frame = api.userInterface().swingUtils().suiteFrame()
+    val matches = findTabMatches(frame, tabName)
+    if (matches.isEmpty()) return CloseRepeaterTabsResult(closedCount = 0, totalMatches = 0)
+
+    val toClose = if (closeAll) matches else matches.take(1)
+
+    toClose.groupBy { it.pane }.forEach { (pane, matchesInPane) ->
+        matchesInPane.sortedByDescending { it.index }.forEach { pane.removeTabAt(it.index) }
+    }
+
+    return CloseRepeaterTabsResult(closedCount = toClose.size, totalMatches = matches.size)
 }
 
 /**
